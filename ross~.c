@@ -1,197 +1,155 @@
 #include "m_pd.h"
-#include <stdlib.h>
+#include <math.h>
 
 // A rossler chaotic attractor
 //
-// from MCLDChaosUgen
-// https://github.com/supercollider/sc3-plugins/blob/main/source/MCLDUGens/MCLDChaosUGens.cpp
+// from ZetaCarinaeModules
+// https://github.com/mhampton/ZetaCarinaeModules/blob/master/src/RosslerRustler.cpp
 
-#define sc_max(a, b) (((a) > (b)) ? (a) : (b))
-#define ONESIXTH 0.1666666666666667
+#define br_minimum(x, y) (y < x ? y : x)
+#define br_maximum(x, y) (x < y ? y : x)
+#define br_clamp(x, minVal, maxVal) (br_minimum(br_maximum(x, minVal), maxVal))
+
+static const float FREQ_C4 = 261.6256f;
 
 static t_class* ross_class;
 
 typedef struct _ross_tilde {
     t_object x_obj;
 
-    double x0, y0, xn, yn, xnm1, ynm1;
-    float counter;
-    double z0, zn, znm1, frac;
-    double sr;
+    float pitch;
+    float gain;
+    float mix;
 
-    // interface
-    float freq;
-    float c;
-    double a, b, h;
+    float a_param;
+    float b_param;
+    float c_param;
 
-    t_inlet* c_in;
+    float xout;
+    float yout;
+    float zout;
 
-    t_outlet* x_out;
-    t_outlet* y_out;
-    t_outlet* z_out;
+    float sampletime;
+
+    t_outlet* x_outlet;
 } t_ross;
 
 // --- interface
 
-void ross_float(t_ross* x, float f)
+static void ross_a(t_ross* x, float a)
 {
-    x->freq = f;
-    post("freq %f", x->freq);
+    x->a_param = br_clamp(a, 0, 1);
 }
 
+static void ross_b(t_ross* x, float b)
+{
+    x->b_param = br_clamp(b, 0, 1);
+}
+
+static void ross_c(t_ross* x, float c)
+{
+    x->c_param = br_clamp(c, 0, 30);
+}
+
+static void ross_pitch(t_ross* x, float pitch)
+{
+    x->pitch = br_clamp(pitch, -10, 10);
+}
+
+static void ross_mix(t_ross* x, float mix)
+{
+    x->mix = br_clamp(mix, 0.f, 1.f);
+}
+
+static void ross_gain(t_ross* x, float gain)
+{
+    x->gain = br_clamp(gain, 0.f, 10.f);
+}
 // --- DSP
+
+static void rossler_slope(float x, float y, float z, float a, float b, float c, float pert, float* output)
+{
+    output[0] = -y - z;
+    output[1] = x + a * y + pert;
+    output[2] = b + z * (x - c);
+}
 
 static t_int* ross_perform(t_int* w)
 {
     t_ross* x = (t_ross*)(w[1]);
     int frames = w[2];
+    t_sample* extin = (t_sample*)w[3];
+    t_sample* out = (t_sample*)w[4];
 
-    t_sample* xout = (t_sample*)w[3];
-    t_sample* yout = (t_sample*)w[4];
-    t_sample* zout = (t_sample*)w[5];
+    float gain = x->gain;
+    float mix = x->mix;
 
-    float freq = x->freq;
-    double a = x->a;
-    double b = x->b;
-    double c = x->c;
-    double h = x->h;
-    double x0 = x->x0;
-    double y0 = x->y0;
-    double z0 = x->z0;
+    float A = x->a_param;
+    float B = x->b_param;
+    float C = x->c_param;
 
-    double xn = x->xn;
-    double yn = x->yn;
-    double zn = x->zn;
-    float counter = x->counter;
-    double xnm1 = x->xnm1;
-    double ynm1 = x->ynm1;
-    double znm1 = x->znm1;
-    double frac = x->frac;
+    float pitch = FREQ_C4 * powf(2.f, x->pitch) * 6.2831853f;
+    float dt = x->sampletime * pitch / 2.0f;
 
-    float samplesPerCycle;
-    double slope;
-    if (freq < x->sr) {
-        samplesPerCycle = x->sr / sc_max(freq, 0.001f);
-        slope = 1.f / samplesPerCycle;
-    } else {
-        samplesPerCycle = 1.f;
-        slope = 1.f;
+    for (int i = 0; i < frames; i++) {
+        float ext = extin[i];
+        float k[3];
+        float k2[3];
+
+        rossler_slope(x->xout, x->yout, x->zout, A, B, C, ext * gain, k);
+        rossler_slope(x->xout + k[0] * dt, x->yout + k[1] * dt, x->zout + k[2] * dt, A, B, C, ext * gain, k2);
+
+        x->xout += (k[0] + k2[0]) * dt;
+        x->yout += (k[1] + k2[1]) * dt;
+        x->zout += (k[2] + k2[2]) * dt;
+
+        x->xout = br_clamp(x->xout, -20.f, 20.f);
+        x->yout = br_clamp(x->yout, -20.f, 20.f);
+        x->zout = br_clamp(x->zout, -20.f, 20.f);
+
+        out[i] = x->xout / 3.0f * (1 - mix) + mix * ext;
     }
 
-    if ((x->x0 != x0) || (x->y0 != y0) || (x->z0 != z0)) {
-        xnm1 = xn;
-        ynm1 = yn;
-        znm1 = zn;
-        x->x0 = xn = x0;
-        x->y0 = yn = y0;
-        x->z0 = zn = z0;
-    }
-
-    double dx = xn - xnm1;
-    double dy = yn - ynm1;
-    double dz = zn - znm1;
-
-    for (int i = 0; i < frames; ++i) {
-        if (counter >= samplesPerCycle) {
-            counter -= samplesPerCycle;
-            frac = 0.f;
-
-            xnm1 = xn;
-            ynm1 = yn;
-            znm1 = zn;
-
-            double k1x, k2x, k3x, k4x, k1y, k2y, k3y, k4y, k1z, k2z, k3z, k4z, kxHalf, kyHalf,
-                kzHalf;
-
-            // 4th order Runge-Kutta approximate solution for differential equations
-            k1x = -(h * (ynm1 + znm1));
-            k1y = h * (xnm1 + a * ynm1);
-            k1z = h * (b + znm1 * (xnm1 - c));
-            kxHalf = k1x * 0.5;
-            kyHalf = k1y * 0.5;
-            kzHalf = k1z * 0.5;
-
-            k2x = -(h * (ynm1 + kyHalf + znm1 + kzHalf));
-            k2y = h * (xnm1 + kxHalf + a * (ynm1 + kyHalf));
-            k2z = h * (b + (znm1 + kzHalf) * (xnm1 + kxHalf - c));
-            kxHalf = k2x * 0.5;
-            kyHalf = k2y * 0.5;
-            kzHalf = k2z * 0.5;
-
-            k3x = -(h * (ynm1 + kyHalf + znm1 + kzHalf));
-            k3y = h * (xnm1 + kxHalf + a * (ynm1 + kyHalf));
-            k3z = h * (b + (znm1 + kzHalf) * (xnm1 + kxHalf - c));
-
-            k4x = -(h * (ynm1 + k3y + znm1 + k3z));
-            k4y = h * (xnm1 + k3x + a * (ynm1 + k3y));
-            k4z = h * (b + (znm1 + k3z) * (xnm1 + k3x - c));
-
-            xn = xn + (k1x + 2.0 * (k2x + k3x) + k4x) * ONESIXTH;
-            yn = yn + (k1y + 2.0 * (k2y + k3y) + k4y) * ONESIXTH;
-            zn = zn + (k1z + 2.0 * (k2z + k3z) + k4z) * ONESIXTH;
-
-            dx = xn - xnm1;
-            dy = yn - ynm1;
-            dz = zn - znm1;
-        }
-        counter++;
-        xout[i] = (xnm1 + dx * frac) * 0.5f;
-        yout[i] = (ynm1 + dy * frac) * 0.5f;
-        zout[i] = (znm1 + dz * frac) * 1.0f;
-
-        frac += slope;
-    }
-
-    x->xn = xn;
-    x->yn = yn;
-    x->zn = zn;
-    x->counter = counter;
-    x->xnm1 = xnm1;
-    x->ynm1 = ynm1;
-    x->znm1 = znm1;
-    x->frac = frac;
-
-    return (w + 6);
+    return (w + 5);
 }
 
 static void ross_dsp(t_ross* x, t_signal** sp)
 {
-    x->sr = sys_getsr();
-    dsp_add(ross_perform, 5, x, sp[0]->s_n, sp[0]->s_vec, sp[1]->s_vec, sp[2]->s_vec);
+    dsp_add(ross_perform, 4, x, sp[0]->s_n, sp[0]->s_vec, sp[1]->s_vec);
 }
 
 // --- init
 
+static void ross_reset(t_ross* x)
+{
+    x->xout = 0.f;
+    x->yout = 5.f;
+    x->zout = 0.f;
+
+    x->pitch = 0;
+    x->gain = 0;
+    x->mix = 0.5;
+
+    x->a_param = 0.2;
+    x->b_param = 0.2;
+    x->c_param = 5.7;
+
+    x->sampletime = 1.f / sys_getsr();
+}
+
 static void* ross_new()
 {
     t_ross* x = (t_ross*)pd_new(ross_class);
-    x->x0 = x->xn = x->xnm1 = 0.1;
-    x->y0 = x->yn = x->ynm1 = 0;
-    x->z0 = x->zn = x->znm1 = 0;
-    x->counter = 0.f;
-    x->frac = 0.f;
+    ross_reset(x);
 
-    x->freq = 5000;
-    x->a = 0.2;
-    x->b = 0.2;
-    x->c = 5.7;
-    x->h = 0.05;
-
-    x->c_in = floatinlet_new(&x->x_obj, &x->c);
-    x->x_out = outlet_new(&x->x_obj, &s_signal);
-    x->y_out = outlet_new(&x->x_obj, &s_signal);
-    x->z_out = outlet_new(&x->x_obj, &s_signal);
+    x->x_outlet = outlet_new(&x->x_obj, &s_signal);
 
     return (void*)x;
 }
 
 static void* ross_free(t_ross* x)
 {
-    inlet_free(x->c_in);
-
-    outlet_free(x->x_out);
-    outlet_free(x->y_out);
-    outlet_free(x->z_out);
+    outlet_free(x->x_outlet);
     return (void*)x;
 }
 
@@ -200,6 +158,14 @@ void ross_tilde_setup()
     ross_class = class_new(gensym("ross~"), (t_newmethod)ross_new, (t_method)ross_free,
         sizeof(t_ross), CLASS_DEFAULT, 0);
 
-    class_addfloat(ross_class, ross_float);
+    class_addmethod(ross_class, nullfn, gensym("signal"), 0);
     class_addmethod(ross_class, (t_method)ross_dsp, gensym("dsp"), A_CANT, 0);
+
+    class_addmethod(ross_class, (t_method)ross_reset, gensym("reset"), 0);
+    class_addmethod(ross_class, (t_method)ross_a, gensym("a"), A_FLOAT, 0);
+    class_addmethod(ross_class, (t_method)ross_b, gensym("b"), A_FLOAT, 0);
+    class_addmethod(ross_class, (t_method)ross_c, gensym("c"), A_FLOAT, 0);
+    class_addmethod(ross_class, (t_method)ross_pitch, gensym("pitch"), A_FLOAT, 0);
+    class_addmethod(ross_class, (t_method)ross_mix, gensym("mix"), A_FLOAT, 0);
+    class_addmethod(ross_class, (t_method)ross_gain, gensym("gain"), A_FLOAT, 0);
 }
