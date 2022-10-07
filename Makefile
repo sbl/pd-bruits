@@ -1,7 +1,12 @@
-# Makefile for ross
+# Makefile for bruits
 
-lib.name = ross
-class.sources = ross~.c
-datafiles = ross-help.pd
+
+lib.name = bruits
+cflags += -I./deps
+
+class.sources = ross~.c gendy~.c
+gendy~.class.sources = deps/mt19937ar/mt19937ar.c
+
+datafiles = ross~-help.pd gendy~-help.pd
 
 include Makefile.pdlibbuilder

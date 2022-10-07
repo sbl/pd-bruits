@@ -1,3 +1,4 @@
+#include "bruits.h"
 #include "m_pd.h"
 #include <math.h>
 
@@ -5,10 +6,6 @@
 //
 // from ZetaCarinaeModules
 // https://github.com/mhampton/ZetaCarinaeModules/blob/master/src/RosslerRustler.cpp
-
-#define br_minimum(x, y) (y < x ? y : x)
-#define br_maximum(x, y) (x < y ? y : x)
-#define br_clamp(x, minVal, maxVal) (br_minimum(br_maximum(x, minVal), maxVal))
 
 static const float FREQ_C4 = 261.6256f;
 
