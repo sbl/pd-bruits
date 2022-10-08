@@ -23,10 +23,10 @@ static t_class* gendy_class;
 typedef enum gendy_distro {
     gendy_uniform = 0,
     gendy_cauchy,
-    gendy_lognormal,
-    gendy_chisquared,
-    gendy_exponential,
-    gendy_extreme,
+    gendy_logist,
+    gendy_hyperbcos,
+    gendy_arcsine,
+    gendy_expon,
 } gendy_distro;
 
 typedef struct _gendy {
@@ -93,7 +93,6 @@ static void gendy_init(t_gendy* x)
 
 static inline double mirror(double input, double lower, double upper)
 {
-
     if ((input >= lower) && (input <= upper))
         return input;
 
@@ -101,36 +100,42 @@ static inline double mirror(double input, double lower, double upper)
     return fabs(remainder(input - lower, fold_range)) + lower;
 }
 
-static double gendy_distribution(gendy_distro d, double param)
+static double gendy_distribution(gendy_distro d, double param, double f)
 {
-    (void)param;
-    double z = 0;
+    double temp, c = 0;
+    param = br_clamp(param, 0.0001, 1);
 
-    z = genrand_real1();
-    // TODO: implement
     switch (d) {
     case gendy_uniform:
-        z = genrand_real1();
         break;
     case gendy_cauchy:
-        /*z = rng_.cauchy(1, param);*/
-        break;
-    case gendy_lognormal:
-        /*z = rng_.lognormal(0.5, param);*/
-        break;
-    case gendy_chisquared:
-        /*z = rng_.chisquared(param);*/
-        break;
-    case gendy_exponential:
-        /*z = rng_.exponential(param);*/
-        break;
-    case gendy_extreme:
-        /*z = rng_.extreme(2 * param - 1, 1);*/
-        break;
+        c = atan(10.0 * param);
+        temp = (1 / param) * tan(c * (2 * f - 1));
+        return temp * 0.1;
+    case gendy_logist:
+        c = 0.5 + (0.499 * param);
+        c = log((1 - c) / c);
+        f = ((f - 0.5) * 0.998 * param) + 0.5;
+        temp = log((1 - f) / f) / c;
+        return temp;
+    case gendy_hyperbcos:
+        c = tan(1.5692255 * param);
+        temp = tan(1.5692255 * param * f) / c;
+        temp = log(temp * 0.999 + 0.001) * (-0.1447648);
+        return 2 * temp - 1.0;
+    case gendy_arcsine:
+        c = sin(1.5707963 * param);
+        temp = sin(M_PI * (f - 0.5) * param) / c;
+        return temp;
+    case gendy_expon:
+        c = log(1.0 - (0.999 * param));
+        temp = log(1.0 - (f * 0.999 * param)) / c;
+        return 2 * temp - 1.0;
     default:
         break;
     }
-    return 2 * z - 1.0;
+
+    return 2 * f - 1.0;
 }
 
 static void gendy_debug(t_gendy* x)
@@ -218,7 +223,7 @@ static t_int* gendy_perform(t_int* w)
         if (phase >= 1) {
             phase -= 1;
 
-            uint8_t index = x->index;
+            int index = x->index;
             index = (index + 1) % knum;
             x->index = index;
 
@@ -226,7 +231,7 @@ static t_int* gendy_perform(t_int* w)
             amp = nextamp;
 
             gendy_distro ampdist = x->ampdist;
-            gendy_distro ampstep = x->ampstep1[index] + gendy_distribution(ampdist, x->ampparam);
+            double ampstep = x->ampstep1[index] + gendy_distribution(ampdist, x->ampparam, genrand_real1());
             ampstep = mirror(ampstep, -1.0, 1.0);
             x->ampstep1[index] = ampstep;
 
@@ -236,7 +241,7 @@ static t_int* gendy_perform(t_int* w)
 
             // dur
             gendy_distro durdist = x->durdist;
-            double durstep = x->durstep1[index] + gendy_distribution(durdist, x->durparam);
+            double durstep = x->durstep1[index] + gendy_distribution(durdist, x->durparam, genrand_real1());
             durstep = mirror(durstep, -1.0, 1.0);
             x->durstep1[index] = durstep;
 

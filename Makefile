@@ -3,7 +3,7 @@
 DEPS = ./deps
 
 lib.name = bruits
-cflags += -I$(DEPS)
+cflags += -I$(DEPS) -pedantic
 
 class.sources = ross~.c gendy~.c
 gendy~.class.sources = $(DEPS)/mt19937ar/mt19937ar.c

@@ -134,7 +134,7 @@ static void ross_reset(t_ross* x)
     x->sampletime = 1.f / sys_getsr();
 }
 
-static void* ross_new()
+static void* ross_new(void)
 {
     t_ross* x = (t_ross*)pd_new(ross_class);
     ross_reset(x);
@@ -150,7 +150,7 @@ static void* ross_free(t_ross* x)
     return (void*)x;
 }
 
-void ross_tilde_setup()
+void ross_tilde_setup(void)
 {
     ross_class = class_new(gensym("ross~"), (t_newmethod)ross_new, (t_method)ross_free,
         sizeof(t_ross), CLASS_DEFAULT, 0);
