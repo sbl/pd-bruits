@@ -1,3 +1,4 @@
+#include "bruits.h"
 #include "m_pd.h"
 #include <math.h>
 
@@ -5,10 +6,6 @@
 //
 // from ZetaCarinaeModules
 // https://github.com/mhampton/ZetaCarinaeModules/blob/master/src/RosslerRustler.cpp
-
-#define br_minimum(x, y) (y < x ? y : x)
-#define br_maximum(x, y) (x < y ? y : x)
-#define br_clamp(x, minVal, maxVal) (br_minimum(br_maximum(x, minVal), maxVal))
 
 static const float FREQ_C4 = 261.6256f;
 
@@ -137,7 +134,7 @@ static void ross_reset(t_ross* x)
     x->sampletime = 1.f / sys_getsr();
 }
 
-static void* ross_new()
+static void* ross_new(void)
 {
     t_ross* x = (t_ross*)pd_new(ross_class);
     ross_reset(x);
@@ -153,7 +150,7 @@ static void* ross_free(t_ross* x)
     return (void*)x;
 }
 
-void ross_tilde_setup()
+void ross_tilde_setup(void)
 {
     ross_class = class_new(gensym("ross~"), (t_newmethod)ross_new, (t_method)ross_free,
         sizeof(t_ross), CLASS_DEFAULT, 0);
