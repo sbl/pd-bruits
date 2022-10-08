@@ -1,11 +1,13 @@
 # Makefile for bruits
 
 
+DEPS = ./deps
+
 lib.name = bruits
-cflags += -I./deps
+cflags += -I$(DEPS)
 
 class.sources = ross~.c gendy~.c
-gendy~.class.sources = deps/mt19937ar/mt19937ar.c
+gendy~.class.sources = $(DEPS)/mt19937ar/mt19937ar.c
 
 datafiles = ross~-help.pd gendy~-help.pd
 
