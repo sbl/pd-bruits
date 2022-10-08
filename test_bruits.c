@@ -12,7 +12,6 @@ void tearDown(void)
 
 void test_minimum(void)
 {
-
     TEST_ASSERT_EQUAL_UINT8(2, br_minimum(2, 4));
     TEST_ASSERT_EQUAL_FLOAT(2., br_minimum(2., 4.));
     TEST_ASSERT_EQUAL_FLOAT(9.1, br_minimum(9.1, 13));

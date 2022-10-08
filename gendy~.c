@@ -7,6 +7,12 @@
 
 #include "mt19937ar/mt19937ar.h"
 
+/**
+ * A gendy algorithm after Xenakis
+ *
+ * See Xenakis, Hoffmann, Lincoln and Serra for literature.
+ */
+
 #define MAX_CONTROL_POINTS 128
 #define RAMP_TIME 0.02
 
@@ -127,47 +133,63 @@ static double gendy_distribution(gendy_distro d, double param)
     return 2 * z - 1.0;
 }
 
-static void gendy_knum(t_gendy* x, uint8_t knum)
+static void gendy_debug(t_gendy* x)
 {
-    x->knum = br_clamp(knum, 1L, MAX_CONTROL_POINTS);
+    post("knum %d", x->knum);
+    post("ampdist %d", x->ampdist);
+    post("durdist %d", x->durdist);
+    post("minfreq %f", x->minfreq);
+    post("maxfreq %f", x->maxfreq);
+    post("ampscale %f", x->ampscale);
+    post("ampparam %f", x->ampparam);
+    post("durscale %f", x->durscale);
+    post("durparam %f", x->durparam);
 }
 
-static void gendy_minfreq(t_gendy* x, double minfreq)
+static void gendy_knum(t_gendy* x, float knum)
+{
+    uint8_t k = (uint8_t)floorf(knum);
+    x->knum = br_clamp(k, 1L, MAX_CONTROL_POINTS);
+}
+
+static void gendy_minfreq(t_gendy* x, float minfreq)
 {
     x->minfreq = br_clamp(minfreq, 0.000001, 22000);
 }
 
-static void gendy_maxfreq(t_gendy* x, double maxfreq)
+static void gendy_maxfreq(t_gendy* x, float maxfreq)
 {
     x->maxfreq = br_clamp(maxfreq, 0.000001, 22000);
 }
 
-static void gendy_ampdist(t_gendy* x, gendy_distro ampdist)
+static void gendy_ampdist(t_gendy* x, float ampdist)
 {
-    x->ampdist = ampdist;
+    gendy_distro dist = (gendy_distro)floorf(ampdist);
+    x->ampdist = dist;
 }
 
-static void gendy_ampparam(t_gendy* x, double ampparam)
+static void gendy_ampparam(t_gendy* x, float ampparam)
 {
     x->ampparam = br_clamp(ampparam, 0., 1.);
 }
 
-static void gendy_ampscale(t_gendy* x, double ampscale)
+static void gendy_ampscale(t_gendy* x, float ampscale)
 {
     x->ampscale = br_clamp(ampscale, 0., 1.);
 }
 
-static void gendy_durdist(t_gendy* x, gendy_distro durdist)
+static void gendy_durdist(t_gendy* x, float durdist)
 {
-    x->durdist = durdist;
+    gendy_distro dist = (gendy_distro)floorf(durdist);
+    x->durdist = dist;
 }
 
-static void gendy_durparam(t_gendy* x, double durparam)
+static void gendy_durparam(t_gendy* x, float durparam)
 {
     x->durparam = br_clamp(durparam, 0., 1.);
 }
 
-static void gendy_durscale(t_gendy* x, double durscale)
+static void gendy_durscale(t_gendy* x, float durscale)
 {
     x->durscale = br_clamp(durscale, 0., 1.);
 }
@@ -263,6 +285,7 @@ void gendy_tilde_setup(void)
     gendy_class = class_new(gensym("gendy~"), (t_newmethod)gendy_new, 0,
         sizeof(t_gendy), 0, A_DEFFLOAT, 0);
 
+    class_addmethod(gendy_class, (t_method)gendy_debug, gensym("debug"), 0);
     class_addmethod(gendy_class, (t_method)gendy_knum, gensym("knum"), A_FLOAT, 0);
     class_addmethod(gendy_class, (t_method)gendy_minfreq, gensym("minfreq"), A_FLOAT, 0);
     class_addmethod(gendy_class, (t_method)gendy_maxfreq, gensym("maxfreq"), A_FLOAT, 0);
